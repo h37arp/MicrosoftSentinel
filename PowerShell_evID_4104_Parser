@@ -1,0 +1,11 @@
+SecurityEvent
+| where EventID == 4104
+| extend EvData = parse_xml(EventData)
+| extend EventDetail = EvData.EventData.Data
+| extend ScriptBlockText = EventDetail.[2].["#text"]
+| extend ScriptBlockID = EventDetail.[3].["#text"]
+| extend Path = EventDetail.[4].["#text"]
+| extend MessageNumber = EventDetail.[0].["#text"]
+| extend MessageTotal = EventDetail.[1].["#text"]
+| project-away EvData, EventDetail, Activity, Channel, EventSourceName
+| project TimeGenerated, Computer, ScriptBlockText, ScriptBlockID, Path

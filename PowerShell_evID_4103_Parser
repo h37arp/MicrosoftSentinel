@@ -1,0 +1,28 @@
+SecurityEvent
+| where EventID == 4103
+| extend EvData = parse_xml(EventData)
+| extend EventDetail = EvData.EventData.Data
+| extend Lines = split(EventDetail.[0].["#text"], "         ")
+| extend HostApplication = split(Lines.[4], "=").[1]
+| extend PS_CommandLine = extract("powershell.exe (.*)$", 1, tostring(HostApplication))
+| extend ImportedModule = extract("Import-Module (.*)$", 1, tostring(PS_CommandLine))
+| extend t0 = split(tostring(ImportedModule), ";").[0]
+| extend t1 = split(tostring(split(t0, '\\')[-1]),"""").[0]
+| extend ImportedModule = trim_end('"',tostring(t1))
+| extend ModulePath = trim_start('"', extract(@"^(.*\\).*", 1, tostring(t0)))
+| extend EngineVersion = split(Lines.[5], "=").[1]
+| extend RunspaceID = split(Lines.[6], "=").[1]
+| extend PipelineID = split(Lines.[7], "=").[1]
+| extend CommandName = split(Lines.[8], "=").[1]
+| extend CommandType = split(Lines.[9], "=").[1]
+| extend ScriptName = split(Lines.[10], "=").[1]
+| extend CommandPath = split(Lines.[11], "=").[1]
+| extend SequenceNumber = split(Lines.[12], "=").[1]
+| extend User = split(Lines.[13], "=").[1]
+| extend ConnectedUser = split(Lines.[14], "=").[1]
+| extend ShellID = split(Lines.[15], "=").[1]
+| extend Severity = split(Lines.[0], "=").[1]
+| extend HostName = split(Lines.[1], "=").[1]
+| extend HostVersion = split(Lines.[2], "=").[1]
+| extend HostID = split(Lines.[3], "=").[1]
+| project-away EvData, t0, t1, EventData, EventDetail, Lines, Channel, EventSourceName, Activity, RunspaceID, EngineVersion, PipelineID

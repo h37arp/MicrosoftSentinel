@@ -1,0 +1,11 @@
+let MerakiSyslogDevices = pack_array("x.x.x.x","y.y.y.y","z.z.z.z"); // replace server1 and server2 with your actual Cisco Meraki device(s) and add more with comma separated
+Syslog
+| where Computer in (MerakiSyslogDevices)
+| project-rename LogMessage =  SyslogMessage
+| extend Lines = split(LogMessage, " ")
+| extend LogType = Lines[2]
+| extend LogTypeSub = trim("type=",tostring(Lines[3]))
+| where LogTypeSub in ("client_vpn_disconnect","client_vpn_connect")
+| parse LogMessage with * "user id '" Username "' local ip " PrivateIpAddress " connected from " PublicIpAddress
+| project-rename Activity=LogTypeSub 
+| project TimeGenerated, Activity, Username, PrivateIpAddress, PublicIpAddress

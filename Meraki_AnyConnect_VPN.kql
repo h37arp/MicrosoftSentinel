@@ -1,0 +1,35 @@
+let MerakiSyslogDevices = pack_array("x.x.x.x","y.y.y.y","z.z.z.z"); // replace server1 and server2 with your actual Cisco Meraki device(s) and add more with comma separated
+let GeoIP = _GetWatchlist('GeoLite2-Country-Blocks-IPv4');
+let table1 = (Syslog
+| where Computer in (MerakiSyslogDevices)
+| project-rename LogMessage =  SyslogMessage
+| extend Lines = split(LogMessage, " ")
+| extend LogType = Lines[2]
+| extend LogTypeSub = trim("type=",tostring(Lines[3]))
+| where LogTypeSub == "anyconnect_vpn_session_manager"
+| extend Activity = "Anyconnect Session"
+| parse-where LogMessage with * "msg= 'Sess-ID[" Session_ID "] Peer IP=" PublicIpAddress " User[" Username "]: Allocated assigned IP=" PrivateIpAddress " '"
+| project-rename AllocationTime=TimeGenerated
+| project AllocationTime, Username, PublicIpAddress, PrivateIpAddress, Session_ID);
+let table2 = (Syslog
+| where Computer in (MerakiSyslogDevices)
+| project-rename LogMessage =  SyslogMessage
+| extend Lines = split(LogMessage, " ")
+| extend LogType = Lines[2]
+| extend LogTypeSub = trim("type=",tostring(Lines[3]))
+| where LogTypeSub == "anyconnect_vpn_session_manager"
+| parse-where LogMessage with * "msg= 'Sess-ID[" Session_ID "] Peer IP=" PublicIpAddress " User[" Username "]: Session disconnected. Session Type: " Session_Type ", Duration: " Duration ", Bytes xmt: " Bytes_Out ", Bytes rcv: " Bytes_in ", Reason: " Reason " '"
+| project-rename DisconnectionTime=TimeGenerated
+| extend days = toint(extract("(\\d+)d", 1, Duration)),
+         hours = toint(extract("(\\d+)h", 1, Duration)),
+         Minutes = toint(extract("(\\d+)m", 1, Duration)),
+         seconds = toint(extract("(\\d+)s", 1, Duration))
+| extend Hours = (days * 24 + hours + Minutes / 60 + seconds / 3600)
+| extend MBytes_Out = toint(Bytes_Out) / (1024 * 1024)
+| extend MBytes_In = toint(Bytes_in) / (1024 * 1024)
+| project-rename Disconnect_Reason=Reason
+| project DisconnectionTime, Username, PublicIpAddress, Duration, Hours, Minutes, MBytes_Out, MBytes_In, Disconnect_Reason, Session_ID);
+table1 | join kind=inner table2 on Session_ID
+| project AllocationTime, DisconnectionTime, Username, PrivateIpAddress, PublicIpAddress, Duration, Hours, Minutes, MBytes_In, MBytes_Out, Session_ID, Disconnect_Reason
+| evaluate ipv4_lookup(GeoIP, PublicIpAddress, Network, return_unmatched = true)
+| project-away SearchKey, LastUpdatedTimeUTC, _DTItemId
